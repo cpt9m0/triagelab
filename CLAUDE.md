@@ -18,6 +18,8 @@ optionally checks the hash against VirusTotal.
 ## Build and test
 
 - Install: `uv sync` (add `--extra web` for the dashboard)
+- If `uv run` fails with `failed to locate pyvenv.cfg`, the `.venv` is partial: delete it
+  and re-run `uv sync`. See the troubleshooting section in README.md.
 - Test: `uv run pytest -q` (must pass before any change is considered done)
 - Lint: `uv run ruff check src tests web`
 - Triage one file: `uv run triagelab scan <path>` (add `--vt` for a VirusTotal lookup)

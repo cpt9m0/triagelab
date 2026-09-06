@@ -134,6 +134,39 @@ claude --worktree rule-engine
 /bin/ls` or `notepad.exe` - to prove the analysis isn't theatre, then name the limitation:
 string matching finds strings, and a packed sample would hide them.
 
+## Troubleshooting: `failed to locate pyvenv.cfg`
+
+If `uv run` reports `failed to locate pyvenv.cfg`, the `.venv` in this folder is partial:
+uv populated `Scripts/` and `Lib/` but never wrote `pyvenv.cfg`, so the console-script
+shims have no interpreter to find.
+
+This happens when the project folder is shared with another system - a synced folder, a
+network drive, or a Linux VM mount - because venv creation is not atomic across that layer.
+
+Fix, in PowerShell:
+
+```powershell
+Remove-Item -Recurse -Force .venv
+uv sync --extra web
+```
+
+If it recurs, keep the environment outside the shared folder entirely:
+
+```powershell
+# once, for this shell
+$env:UV_PROJECT_ENVIRONMENT = "$env:USERPROFILE\.venvs\triagelab"
+
+# or permanently
+setx UV_PROJECT_ENVIRONMENT "$env:USERPROFILE\.venvs\triagelab"
+
+uv sync --extra web
+uv run --extra web uvicorn web.app:app --reload --port 8000
+```
+
+Everything else in the repo is path-independent, so nothing breaks by relocating the venv.
+Do this before the talk rather than during it: a rebuild takes a few seconds, but not while
+an audience watches.
+
 ## Windows notes
 
 Hook commands in `.claude/settings.json` call `python`. If your PATH exposes the launcher as
