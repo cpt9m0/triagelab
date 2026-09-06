@@ -85,8 +85,18 @@ uv run triagelab submit <file> --yes --wait 3   # ... and poll for the verdict
 uv run --extra web uvicorn web.app:app --port 8000   # dashboard on :8000
 ```
 
-The dashboard's upload box accepts multiple files at once. Uploaded files are written to
-`uploads/`, read as bytes, and **never executed**. Each report page has a "Look up this
+The dashboard offers two ways in:
+
+- **Upload** - multiple files at once, up to **200MB each**, streamed to `uploads/` in 1MB
+  chunks rather than buffered in memory. Convenient, but HTTP multipart parsing dominates
+  the wait on large files: a 120MB binary takes ~22s, of which ~16s is the parser.
+- **Scan in place** - paste a path and the file is analysed where it sits. No copy, no
+  upload, no parser. The same 120MB binary takes ~6s. Windows' "Copy as path" quoting is
+  handled. Use this for anything big.
+
+Either way files are read as bytes and **never executed**. The dashboard binds to
+localhost, and scan-in-place reads with your own privileges - the same access the CLI
+already has. Each report page has a "Look up this
 hash" button so you spend quota deliberately rather than on every page view.
 
 ## Demo map: one artifact per rung

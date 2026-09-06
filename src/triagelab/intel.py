@@ -274,27 +274,59 @@ def forget(sha256: str) -> None:
         pass
 
 
-def _multipart(field_name: str, filename: str, payload: bytes) -> tuple[bytes, str]:
-    """Build a multipart/form-data body. urllib has no encoder, and that is fine."""
+def _multipart_envelope(field_name: str, filename: str) -> tuple[bytes, bytes, str]:
+    """Head and tail of a multipart/form-data body. urllib ships no encoder.
+
+    The file's bytes go between them, streamed from disk, so a 200MB upload never
+    becomes a 200MB (let alone 400MB) Python object.
+    """
     import uuid
 
     boundary = uuid.uuid4().hex
     safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in filename) or "sample"
-    body = (
+    head = (
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="{field_name}"; filename="{safe}"\r\n'
         f"Content-Type: application/octet-stream\r\n\r\n"
     ).encode("utf-8")
-    body += payload + f"\r\n--{boundary}--\r\n".encode("utf-8")
-    return body, f"multipart/form-data; boundary={boundary}"
+    tail = f"\r\n--{boundary}--\r\n".encode("utf-8")
+    return head, tail, f"multipart/form-data; boundary={boundary}"
 
 
-def _request_json(url: str, api_key: str, data: bytes | None = None,
-                  content_type: str | None = None, timeout: int = REQUEST_TIMEOUT) -> tuple[dict | None, VTResult | None]:
-    """Shared HTTP plumbing. Returns (payload, error_result) - exactly one is set."""
+def _stream_multipart(head: bytes, path: Path, tail: bytes, chunk_size: int = 1024 * 1024):
+    """Yield the request body a megabyte at a time."""
+    yield head
+    with path.open("rb") as handle:
+        while chunk := handle.read(chunk_size):
+            yield chunk
+    yield tail
+
+
+def sha256_of(path: Path, chunk_size: int = 1024 * 1024) -> str:
+    """Hash a file without holding it in memory."""
+    import hashlib
+
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(chunk_size):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _request_json(url: str, api_key: str, data=None, content_type: str | None = None,
+                  timeout: int = REQUEST_TIMEOUT, content_length: int | None = None
+                  ) -> tuple[dict | None, VTResult | None]:
+    """Shared HTTP plumbing. Returns (payload, error_result) - exactly one is set.
+
+    `data` may be bytes or an iterable of bytes; an iterable needs content_length so
+    the request is sent with a real Content-Length rather than chunked, which the
+    VirusTotal upload endpoint expects.
+    """
     headers = {"x-apikey": api_key, "accept": "application/json"}
     if content_type:
         headers["content-type"] = content_type
+    if content_length is not None:
+        headers["content-length"] = str(content_length)
     request = urllib.request.Request(url, data=data, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -361,21 +393,20 @@ def submit_file(path: str | Path, confirm: bool = False, api_key: str | None = N
             "VirusTotal publishes it to their subscribers and cannot be undone.",
         )
     try:
-        payload = file_path.read_bytes()
+        size = file_path.stat().st_size
+        digest = sha256_of(file_path)
     except OSError as exc:
         return VTResult(status=STATUS_ERROR, sha256="", message=f"Cannot read {file_path}: {exc}")
 
-    import hashlib
-
-    digest = hashlib.sha256(payload).hexdigest()
-
-    if not payload:
-        return VTResult(status=STATUS_ERROR, sha256=digest, message="Refusing to submit an empty file.")
-    if len(payload) > MAX_UPLOAD_BYTES:
+    if not size:
+        return VTResult(
+            status=STATUS_ERROR, sha256=digest, message="Refusing to submit an empty file."
+        )
+    if size > MAX_UPLOAD_BYTES:
         return VTResult(
             status=STATUS_ERROR,
             sha256=digest,
-            message=f"File is {len(payload) // (1024 * 1024)}MB; VirusTotal's limit is 650MB.",
+            message=f"File is {size // (1024 * 1024)}MB; VirusTotal's limit is 650MB.",
         )
 
     key = api_key or vt_api_key()
@@ -387,7 +418,7 @@ def submit_file(path: str | Path, confirm: bool = False, api_key: str | None = N
         return blocked
 
     target = UPLOAD_URL
-    if len(payload) > DIRECT_UPLOAD_LIMIT:
+    if size > DIRECT_UPLOAD_LIMIT:
         _record_call(time.time())
         big, error = _request_json(BIG_UPLOAD_URL, key)
         if error:
@@ -397,9 +428,16 @@ def submit_file(path: str | Path, confirm: bool = False, api_key: str | None = N
         if not target:
             return VTResult(status=STATUS_ERROR, sha256=digest, message="No upload URL returned.")
 
-    body, content_type = _multipart("file", file_path.name, payload)
+    head, tail, content_type = _multipart_envelope("file", file_path.name)
     _record_call(time.time())
-    response, error = _request_json(target, key, data=body, content_type=content_type, timeout=UPLOAD_TIMEOUT)
+    response, error = _request_json(
+        target,
+        key,
+        data=_stream_multipart(head, file_path, tail),
+        content_type=content_type,
+        timeout=UPLOAD_TIMEOUT,
+        content_length=len(head) + size + len(tail),
+    )
     if error:
         error.sha256 = digest
         return error

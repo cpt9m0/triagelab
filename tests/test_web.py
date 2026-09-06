@@ -117,3 +117,68 @@ def test_check_route_polls_the_analysis(client, monkeypatch):
     client.post("/report/poll/vt-submit")
     page = client.post("/report/poll/vt-check").text
     assert "3/63" in page
+
+
+def test_upload_limit_is_200mb():
+    import web.app as webapp
+
+    assert webapp.MAX_UPLOAD_BYTES == 200 * 1024 * 1024
+
+
+def test_oversized_upload_is_rejected_and_leaves_no_file(client, monkeypatch):
+    import web.app as webapp
+
+    monkeypatch.setattr(webapp, "MAX_UPLOAD_BYTES", 1024)
+    response = client.post(
+        "/upload", files=[("files", ("huge.bin", b"x" * 4096, "application/octet-stream"))]
+    )
+    assert "exceeds" in response.text
+    assert not (webapp.UPLOADS_DIR / "huge.bin").exists()
+
+
+def test_multi_megabyte_upload_round_trips(client):
+    payload = bytes(range(256)) * 20000  # ~5MB, crosses the 1MB chunk boundary
+    response = client.post(
+        "/upload", files=[("files", ("chunky.bin", payload, "application/octet-stream"))]
+    )
+    assert response.status_code == 200
+
+    import hashlib
+
+    import web.app as webapp
+
+    written = (webapp.UPLOADS_DIR / "chunky.bin").read_bytes()
+    assert hashlib.sha256(written).hexdigest() == hashlib.sha256(payload).hexdigest()
+
+
+def test_scan_in_place_avoids_the_upload_path(client, tmp_path):
+    """A local file is triaged without being copied into uploads/."""
+    sample = tmp_path / "local_binary.exe"
+    sample.write_bytes(b"MZ" + b"VirtualAllocEx CreateRemoteThread " * 4)
+
+    response = client.post("/scan-path", data={"path": str(sample)})
+    assert response.status_code == 200
+    assert "local_binary.exe" in response.text
+
+    import web.app as webapp
+
+    assert not (webapp.UPLOADS_DIR / "local_binary.exe").exists()
+    assert (webapp.REPORTS_DIR / "local_binary.json").is_file()
+
+
+def test_scan_in_place_reports_a_missing_file(client, tmp_path):
+    response = client.post("/scan-path", data={"path": str(tmp_path / "nope.bin")})
+    assert "No such file" in response.text
+
+
+def test_scan_in_place_rejects_a_directory(client, tmp_path):
+    response = client.post("/scan-path", data={"path": str(tmp_path)})
+    assert "Not a file" in response.text
+
+
+def test_scan_in_place_tolerates_quoted_paths(client, tmp_path):
+    """Windows' "Copy as path" wraps the path in quotes."""
+    sample = tmp_path / "quoted.bin"
+    sample.write_bytes(b"some bytes here")
+    response = client.post("/scan-path", data={"path": f'"{sample}"'})
+    assert "quoted.bin" in response.text

@@ -233,10 +233,51 @@ def test_analysis_check_needs_an_id():
     assert intel.get_analysis("").status == intel.STATUS_ERROR
 
 
-def test_multipart_body_is_well_formed():
-    body, content_type = intel._multipart("file", "odd name!.exe", b"BYTES")
+def test_multipart_envelope_is_well_formed(tmp_path):
+    head, tail, content_type = intel._multipart_envelope("file", "odd name!.exe")
     boundary = content_type.split("boundary=")[1]
-    assert body.startswith(f"--{boundary}".encode())
-    assert body.endswith(f"--{boundary}--\r\n".encode())
-    assert b'filename="odd_name_.exe"' in body
-    assert b"BYTES" in body
+    assert head.startswith(f"--{boundary}".encode())
+    assert tail == f"\r\n--{boundary}--\r\n".encode()
+    assert b'filename="odd_name_.exe"' in head
+
+
+def test_multipart_streams_the_file_in_chunks(tmp_path):
+    sample = tmp_path / "big.bin"
+    sample.write_bytes(b"A" * (3 * 1024 * 1024))
+    head, tail, _ = intel._multipart_envelope("file", "big.bin")
+
+    chunks = list(intel._stream_multipart(head, sample, tail, chunk_size=1024 * 1024))
+    assert chunks[0] == head and chunks[-1] == tail
+    assert len(chunks) == 5  # head + three 1MB chunks + tail
+    assert max(len(c) for c in chunks[1:-1]) == 1024 * 1024
+    assert b"".join(chunks) == head + b"A" * (3 * 1024 * 1024) + tail
+
+
+def test_streaming_hash_matches_hashing_it_all_at_once(tmp_path):
+    import hashlib
+
+    sample = tmp_path / "x.bin"
+    payload = bytes(range(256)) * 8192
+    sample.write_bytes(payload)
+    assert intel.sha256_of(sample, chunk_size=4096) == hashlib.sha256(payload).hexdigest()
+
+
+def test_upload_sends_a_real_content_length(tmp_path, monkeypatch):
+    """An iterable body without Content-Length would go out chunked, which VT rejects."""
+    captured = {}
+
+    def fake_request(url, key, data=None, content_type=None, timeout=None, content_length=None):
+        captured["length"] = content_length
+        captured["streamed"] = hasattr(data, "__iter__") and not isinstance(data, bytes)
+        return {"data": {"id": "an-1"}}, None
+
+    monkeypatch.setattr(intel, "vt_api_key", lambda: "key")
+    monkeypatch.setattr(intel, "_request_json", fake_request)
+
+    sample = tmp_path / "thing.bin"
+    sample.write_bytes(b"payload bytes")
+    head, tail, _ = intel._multipart_envelope("file", "thing.bin")
+
+    intel.submit_file(sample, confirm=True)
+    assert captured["streamed"] is True
+    assert captured["length"] == len(head) + 13 + len(tail)

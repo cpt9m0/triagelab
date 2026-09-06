@@ -16,7 +16,7 @@ import re
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -30,7 +30,8 @@ REPORTS_DIR = PROJECT_ROOT / "reports"
 UPLOADS_DIR = PROJECT_ROOT / "uploads"
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
-MAX_UPLOAD_BYTES = 64 * 1024 * 1024
+MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+UPLOAD_CHUNK = 1024 * 1024
 SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 
 app = FastAPI(title="triagelab dashboard", docs_url="/api/docs")
@@ -87,28 +88,64 @@ def index(request: Request, error: str = "", added: int = 0):
 
 @app.post("/upload")
 async def upload(files: list[UploadFile] = File(...)):
-    """Accept one or more files, triage each, write a report. Never executes anything."""
+    """Accept one or more files, triage each, write a report. Never executes anything.
+
+    Written to disk in chunks rather than read whole into memory: a 200MB installer
+    should not cost 200MB of RSS just to be hashed.
+    """
     added = 0
     for upload_file in files:
-        payload = await upload_file.read()
-        if not payload:
-            continue
-        if len(payload) > MAX_UPLOAD_BYTES:
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        target = UPLOADS_DIR / safe_filename(upload_file.filename)
+
+        written = 0
+        oversized = False
+        with target.open("wb") as handle:
+            while chunk := await upload_file.read(UPLOAD_CHUNK):
+                written += len(chunk)
+                if written > MAX_UPLOAD_BYTES:
+                    oversized = True
+                    break
+                handle.write(chunk)
+
+        if oversized:
+            target.unlink(missing_ok=True)
             return RedirectResponse(
                 f"/?error=File+{safe_filename(upload_file.filename)}+exceeds+"
                 f"{MAX_UPLOAD_BYTES // (1024 * 1024)}MB",
                 status_code=303,
             )
+        if written == 0:
+            target.unlink(missing_ok=True)
+            continue
 
-        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-        target = UPLOADS_DIR / safe_filename(upload_file.filename)
-        target.write_bytes(payload)
         write_report(build_report(target), REPORTS_DIR)
         added += 1
 
     if added == 0:
         return RedirectResponse("/?error=No+files+received", status_code=303)
     return RedirectResponse(f"/?added={added}", status_code=303)
+
+
+@app.post("/scan-path")
+def scan_local_path(path: str = Form(...)):
+    """Triage a file already on this disk, without pushing it through HTTP.
+
+    Uploading a 200MB installer spends most of its time in multipart parsing, not
+    analysis. The dashboard runs on the same machine as the file, so for anything
+    large this is the fast route: no copy, no upload, no parser.
+    """
+    target = Path(path.strip().strip('"').strip("'")).expanduser()
+    if not target.exists():
+        return RedirectResponse(f"/?error=No+such+file:+{target.name or path}", status_code=303)
+    if not target.is_file():
+        return RedirectResponse(f"/?error=Not+a+file:+{target.name}", status_code=303)
+
+    try:
+        write_report(build_report(target), REPORTS_DIR)
+    except OSError as exc:
+        return RedirectResponse(f"/?error=Could+not+read+that+file:+{exc.strerror}", status_code=303)
+    return RedirectResponse("/?added=1", status_code=303)
 
 
 @app.get("/report/{stem}", response_class=HTMLResponse)
