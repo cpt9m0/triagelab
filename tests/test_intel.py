@@ -126,3 +126,117 @@ def test_recording_a_call_increments_both_counters():
 def test_result_serialises_for_the_report(tmp_path):
     payload = intel.parse_payload(CANNED, DIGEST).to_dict()
     assert json.loads(json.dumps(payload))["detection_ratio"] == "56/68"
+
+
+# --- file submission -------------------------------------------------------
+# Every test here is offline. Any attempt to reach the network fails the test,
+# which is the guard that should have existed before a stray smoke test
+# published a file to VirusTotal for real.
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    def explode(*args, **kwargs):
+        pytest.fail("test attempted a real network call")
+
+    monkeypatch.setattr(intel, "_request_json", explode)
+
+
+def test_submit_refuses_without_confirmation(tmp_path):
+    sample = tmp_path / "thing.bin"
+    sample.write_bytes(b"payload")
+    result = intel.submit_file(sample)
+    assert result.status == intel.STATUS_ERROR
+    assert "confirm=True" in result.message
+
+
+def test_submit_refuses_an_empty_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(intel, "vt_api_key", lambda: "key")
+    sample = tmp_path / "empty.bin"
+    sample.write_bytes(b"")
+    assert "empty" in intel.submit_file(sample, confirm=True).message
+
+
+def test_submit_refuses_oversized_files(tmp_path, monkeypatch):
+    monkeypatch.setattr(intel, "vt_api_key", lambda: "key")
+    monkeypatch.setattr(intel, "MAX_UPLOAD_BYTES", 4)
+    sample = tmp_path / "big.bin"
+    sample.write_bytes(b"more than four bytes")
+    assert "650MB" in intel.submit_file(sample, confirm=True).message
+
+
+def test_submit_without_key_never_reaches_the_network(tmp_path, monkeypatch):
+    monkeypatch.setattr(intel, "vt_api_key", lambda: None)
+    sample = tmp_path / "thing.bin"
+    sample.write_bytes(b"payload")
+    assert intel.submit_file(sample, confirm=True).status == intel.STATUS_NO_KEY
+
+
+def test_successful_submission_returns_a_pending_analysis(tmp_path, monkeypatch):
+    monkeypatch.setattr(intel, "vt_api_key", lambda: "key")
+    monkeypatch.setattr(
+        intel, "_request_json", lambda *a, **k: ({"data": {"id": "analysis-123"}}, None)
+    )
+    sample = tmp_path / "thing.bin"
+    sample.write_bytes(b"payload")
+
+    result = intel.submit_file(sample, confirm=True)
+    assert result.status == intel.STATUS_PENDING
+    assert result.analysis_id == "analysis-123"
+    assert result.permalink.endswith(result.sha256)
+
+
+def test_submission_clears_a_cached_not_found(tmp_path, monkeypatch):
+    """Otherwise the stale 404 would mask the result we just paid to generate."""
+    sample = tmp_path / "thing.bin"
+    sample.write_bytes(b"payload")
+    import hashlib
+
+    digest = hashlib.sha256(b"payload").hexdigest()
+    intel._write_cache(digest, None, not_found=True)
+    assert intel.read_cache(digest).status == intel.STATUS_NOT_FOUND
+
+    monkeypatch.setattr(intel, "vt_api_key", lambda: "key")
+    monkeypatch.setattr(intel, "_request_json", lambda *a, **k: ({"data": {"id": "x"}}, None))
+    intel.submit_file(sample, confirm=True)
+    assert intel.read_cache(digest) is None
+
+
+def test_analysis_still_running_reports_pending(monkeypatch):
+    monkeypatch.setattr(intel, "vt_api_key", lambda: "key")
+    monkeypatch.setattr(
+        intel,
+        "_request_json",
+        lambda *a, **k: ({"data": {"attributes": {"status": "in-progress"}}}, None),
+    )
+    result = intel.get_analysis("analysis-123", sha256=DIGEST)
+    assert result.status == intel.STATUS_PENDING
+    assert result.analysis_status == "in-progress"
+
+
+def test_completed_analysis_returns_the_full_file_report(monkeypatch):
+    monkeypatch.setattr(intel, "vt_api_key", lambda: "key")
+    monkeypatch.setattr(
+        intel,
+        "_request_json",
+        lambda *a, **k: ({"data": {"attributes": {"status": "completed"}}}, None),
+    )
+    monkeypatch.setattr(
+        intel, "lookup", lambda *a, **k: intel.parse_payload(CANNED, DIGEST)
+    )
+    result = intel.get_analysis("analysis-123", sha256=DIGEST)
+    assert result.status == intel.STATUS_OK
+    assert result.detection_ratio == "56/68"
+
+
+def test_analysis_check_needs_an_id():
+    assert intel.get_analysis("").status == intel.STATUS_ERROR
+
+
+def test_multipart_body_is_well_formed():
+    body, content_type = intel._multipart("file", "odd name!.exe", b"BYTES")
+    boundary = content_type.split("boundary=")[1]
+    assert body.startswith(f"--{boundary}".encode())
+    assert body.endswith(f"--{boundary}--\r\n".encode())
+    assert b'filename="odd_name_.exe"' in body
+    assert b"BYTES" in body

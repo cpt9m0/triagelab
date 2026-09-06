@@ -26,7 +26,15 @@ from pathlib import Path
 from .config import project_root, vt_api_key
 
 API_URL = "https://www.virustotal.com/api/v3/files/{sha256}"
+UPLOAD_URL = "https://www.virustotal.com/api/v3/files"
+BIG_UPLOAD_URL = "https://www.virustotal.com/api/v3/files/upload_url"
+ANALYSIS_URL = "https://www.virustotal.com/api/v3/analyses/{analysis_id}"
 GUI_URL = "https://www.virustotal.com/gui/file/{sha256}"
+
+# The public API takes files up to 32MB directly; larger ones need a one-time upload URL.
+DIRECT_UPLOAD_LIMIT = 32 * 1024 * 1024
+MAX_UPLOAD_BYTES = 650 * 1024 * 1024
+UPLOAD_TIMEOUT = 300
 CACHE_DIR = project_root() / ".vt_cache"
 STATE_FILE = CACHE_DIR / "_quota.json"
 
@@ -39,6 +47,7 @@ STATUS_NOT_FOUND = "not_found"
 STATUS_NO_KEY = "no_key"
 STATUS_RATE_LIMITED = "rate_limited"
 STATUS_ERROR = "error"
+STATUS_PENDING = "pending"
 
 
 @dataclass
@@ -57,6 +66,8 @@ class VTResult:
     times_submitted: int = 0
     permalink: str = ""
     retry_after: int = 0
+    analysis_id: str = ""
+    analysis_status: str = ""
 
     @property
     def detection_ratio(self) -> str:
@@ -249,3 +260,204 @@ def lookup(sha256: str, use_cache: bool = True, api_key: str | None = None) -> V
 
     _record_call(now)
     return _fetch(sha256, key)
+
+
+def forget(sha256: str) -> None:
+    """Drop a cached entry so the next lookup goes live.
+
+    Used after a submission completes: the cached `not_found` from before the upload
+    would otherwise mask the fresh result forever.
+    """
+    try:
+        _cache_path(sha256.strip().lower()).unlink()
+    except OSError:
+        pass
+
+
+def _multipart(field_name: str, filename: str, payload: bytes) -> tuple[bytes, str]:
+    """Build a multipart/form-data body. urllib has no encoder, and that is fine."""
+    import uuid
+
+    boundary = uuid.uuid4().hex
+    safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in filename) or "sample"
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="{field_name}"; filename="{safe}"\r\n'
+        f"Content-Type: application/octet-stream\r\n\r\n"
+    ).encode("utf-8")
+    body += payload + f"\r\n--{boundary}--\r\n".encode("utf-8")
+    return body, f"multipart/form-data; boundary={boundary}"
+
+
+def _request_json(url: str, api_key: str, data: bytes | None = None,
+                  content_type: str | None = None, timeout: int = REQUEST_TIMEOUT) -> tuple[dict | None, VTResult | None]:
+    """Shared HTTP plumbing. Returns (payload, error_result) - exactly one is set."""
+    headers = {"x-apikey": api_key, "accept": "application/json"}
+    if content_type:
+        headers["content-type"] = content_type
+    request = urllib.request.Request(url, data=data, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8")), None
+    except urllib.error.HTTPError as exc:
+        if exc.code == 401:
+            return None, VTResult(status=STATUS_ERROR, sha256="", message="VirusTotal rejected the API key (401).")
+        if exc.code == 429:
+            return None, VTResult(
+                status=STATUS_RATE_LIMITED,
+                sha256="",
+                message="VirusTotal returned 429: quota exhausted (free tier is 4/min, 500/day).",
+                retry_after=60,
+            )
+        if exc.code == 413:
+            return None, VTResult(status=STATUS_ERROR, sha256="", message="File is too large for VirusTotal.")
+        return None, VTResult(status=STATUS_ERROR, sha256="", message=f"VirusTotal error {exc.code}.")
+    except (urllib.error.URLError, TimeoutError) as exc:
+        return None, VTResult(status=STATUS_ERROR, sha256="", message=f"Network error: {exc}")
+    except json.JSONDecodeError:
+        return None, VTResult(status=STATUS_ERROR, sha256="", message="Malformed response from VirusTotal.")
+
+
+def _check_quota(sha256: str) -> VTResult | None:
+    """Shared gate: key present, inside the free-tier limits. None means go ahead."""
+    now = time.time()
+    quota = quota_status(now)
+    if quota["retry_after"]:
+        return VTResult(
+            status=STATUS_RATE_LIMITED,
+            sha256=sha256,
+            message=f"Local throttle: {CALLS_PER_MINUTE} calls/min on the free tier. "
+            f"Try again in {quota['retry_after']}s.",
+            retry_after=quota["retry_after"],
+        )
+    if quota["used_today"] >= DAILY_QUOTA:
+        return VTResult(
+            status=STATUS_RATE_LIMITED,
+            sha256=sha256,
+            message=f"Daily free-tier quota of {DAILY_QUOTA} calls is used up.",
+        )
+    return None
+
+
+def submit_file(path: str | Path, confirm: bool = False, api_key: str | None = None) -> VTResult:
+    """Upload a file to VirusTotal for analysis.
+
+    THIS PUBLISHES THE FILE. Anything submitted becomes retrievable by VirusTotal
+    Intelligence subscribers. Never submit proprietary, confidential, or personal
+    files.
+
+    `confirm` must be True. The flag exists so that no test, script, agent, or
+    stray call can publish a file by accident: the dangerous path is the one you
+    have to ask for by name. Callers pass it only in response to a human action.
+
+    Returns a pending result carrying an analysis_id; poll it with get_analysis().
+    """
+    file_path = Path(path)
+    if not confirm:
+        return VTResult(
+            status=STATUS_ERROR,
+            sha256="",
+            message="Refusing to upload without confirm=True. Submitting a file to "
+            "VirusTotal publishes it to their subscribers and cannot be undone.",
+        )
+    try:
+        payload = file_path.read_bytes()
+    except OSError as exc:
+        return VTResult(status=STATUS_ERROR, sha256="", message=f"Cannot read {file_path}: {exc}")
+
+    import hashlib
+
+    digest = hashlib.sha256(payload).hexdigest()
+
+    if not payload:
+        return VTResult(status=STATUS_ERROR, sha256=digest, message="Refusing to submit an empty file.")
+    if len(payload) > MAX_UPLOAD_BYTES:
+        return VTResult(
+            status=STATUS_ERROR,
+            sha256=digest,
+            message=f"File is {len(payload) // (1024 * 1024)}MB; VirusTotal's limit is 650MB.",
+        )
+
+    key = api_key or vt_api_key()
+    if not key:
+        return VTResult(status=STATUS_NO_KEY, sha256=digest, message="No VT_API_KEY set.")
+
+    blocked = _check_quota(digest)
+    if blocked:
+        return blocked
+
+    target = UPLOAD_URL
+    if len(payload) > DIRECT_UPLOAD_LIMIT:
+        _record_call(time.time())
+        big, error = _request_json(BIG_UPLOAD_URL, key)
+        if error:
+            error.sha256 = digest
+            return error
+        target = (big or {}).get("data", "")
+        if not target:
+            return VTResult(status=STATUS_ERROR, sha256=digest, message="No upload URL returned.")
+
+    body, content_type = _multipart("file", file_path.name, payload)
+    _record_call(time.time())
+    response, error = _request_json(target, key, data=body, content_type=content_type, timeout=UPLOAD_TIMEOUT)
+    if error:
+        error.sha256 = digest
+        return error
+
+    analysis_id = ((response or {}).get("data") or {}).get("id", "")
+    forget(digest)  # the cached not_found must not mask the incoming result
+    return VTResult(
+        status=STATUS_PENDING,
+        sha256=digest,
+        analysis_id=analysis_id,
+        analysis_status="queued",
+        message="Uploaded. VirusTotal is analysing it; this usually takes under a minute.",
+        permalink=GUI_URL.format(sha256=digest),
+    )
+
+
+def get_analysis(analysis_id: str, sha256: str = "", api_key: str | None = None) -> VTResult:
+    """Poll a submitted analysis. When it completes, return the full file report."""
+    if not analysis_id:
+        return VTResult(status=STATUS_ERROR, sha256=sha256, message="No analysis id to check.")
+
+    key = api_key or vt_api_key()
+    if not key:
+        return VTResult(status=STATUS_NO_KEY, sha256=sha256, message="No VT_API_KEY set.")
+
+    blocked = _check_quota(sha256)
+    if blocked:
+        blocked.analysis_id = analysis_id
+        return blocked
+
+    _record_call(time.time())
+    response, error = _request_json(ANALYSIS_URL.format(analysis_id=analysis_id), key)
+    if error:
+        error.sha256 = sha256
+        error.analysis_id = analysis_id
+        return error
+
+    attributes = ((response or {}).get("data") or {}).get("attributes") or {}
+    state = attributes.get("status", "unknown")
+
+    if state != "completed":
+        return VTResult(
+            status=STATUS_PENDING,
+            sha256=sha256,
+            analysis_id=analysis_id,
+            analysis_status=state,
+            message=f"Analysis is {state}. Check again in a few seconds.",
+            permalink=GUI_URL.format(sha256=sha256) if sha256 else "",
+        )
+
+    if sha256:
+        forget(sha256)
+        return lookup(sha256, use_cache=False, api_key=key)
+
+    return VTResult(
+        status=STATUS_OK,
+        sha256=sha256,
+        analysis_id=analysis_id,
+        analysis_status="completed",
+        stats=attributes.get("stats") or {},
+    )

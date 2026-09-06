@@ -10,8 +10,16 @@ optionally checks the hash against VirusTotal.
   out to anything it inspects, and it must not grow a feature that does.
 - **No samples in git.** `fixtures/samples/`, `uploads/` and `reports/` are gitignored and
   ship empty. Files analysed during a demo are the presenter's own and stay local.
-- **Hash-only intel.** VirusTotal lookups send the SHA256 and nothing else. Never add code
-  that uploads a file to a third party.
+- **Lookups are hash-only.** `intel.lookup()` sends the SHA256 and nothing else.
+- **Uploads publish.** `intel.submit_file()` sends the file itself to VirusTotal, where
+  their Intelligence subscribers can download it. It cannot be undone. It therefore
+  requires `confirm=True`, and that argument is passed in exactly two places: the
+  dashboard's consent-checkbox form, and the CLI's `--yes` flag. Both are human actions.
+  - **Never call `submit_file` yourself.** Not in a test, not in a smoke check, not to
+    "verify the integration", not on the user's behalf without them asking for that
+    specific file. Tests monkeypatch `_request_json`; a real call inside the test suite
+    is a bug, and `tests/test_intel.py` has a fixture that fails the run if one happens.
+  - Never submit anything proprietary, confidential, or personal. When in doubt, ask.
 - **No secrets in git.** The key lives in `.env`, which is gitignored. `.env.example` holds
   the placeholder. Never write a real key into any tracked file.
 

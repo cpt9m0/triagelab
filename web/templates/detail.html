@@ -35,6 +35,30 @@
         {% if not has_key %}<strong>No VT_API_KEY set</strong> - add one to .env first.{% endif %}
         Free tier: {{ quota.calls_per_minute }}/min, {{ quota.used_today }}/{{ quota.daily_quota }} used today.
       </div>
+    {% elif vt.status == 'not_found' %}
+      <div class="note" style="margin-top: 10px;">
+        <strong>VirusTotal has never seen this file.</strong> {{ vt.message }}
+        Absence is not evidence of safety - it means nobody has submitted it.
+      </div>
+      <form action="/report/{{ stem }}/vt-submit" method="post" style="margin-top: 12px;">
+        <label class="note" style="display: block; margin-bottom: 8px;">
+          <input type="checkbox" name="consent" required>
+          I understand that uploading <strong>publishes this file</strong> to VirusTotal,
+          where their Intelligence subscribers can download it. Never do this with
+          proprietary, confidential, or personal files.
+        </label>
+        <button type="submit">Upload file for analysis</button>
+      </form>
+
+    {% elif vt.status == 'pending' %}
+      <div class="note" style="margin-top: 10px;">
+        <strong>Analysis {{ vt.analysis_status or 'queued' }}.</strong> {{ vt.message }}
+        {% if vt.analysis_id %}<br><span class="mono">id: {{ vt.analysis_id[:32] }}...</span>{% endif %}
+      </div>
+      <form action="/report/{{ stem }}/vt-check" method="post" style="margin-top: 10px;">
+        <button type="submit">Check analysis</button>
+      </form>
+
     {% elif vt.status == 'ok' %}
       <table class="kv" style="margin-top: 10px;">
         <tr><th>Detections</th>

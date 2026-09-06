@@ -68,3 +68,52 @@ def test_vt_panel_reports_missing_key_instead_of_failing(client, monkeypatch):
     response = client.post("/report/quiet/vt")
     assert response.status_code == 200
     assert "no_key" in response.text or "VT_API_KEY" in response.text
+
+
+def test_not_found_offers_an_explicit_consented_upload(client, monkeypatch):
+    monkeypatch.setattr(
+        intel,
+        "lookup",
+        lambda *a, **k: intel.VTResult(status=intel.STATUS_NOT_FOUND, sha256="a" * 64,
+                                       message="never seen"),
+    )
+    client.post("/upload", files=[("files", ("novel.bin", b"unique bytes here", "application/octet-stream"))])
+    page = client.post("/report/novel/vt").text
+    assert "Upload file for analysis" in page
+    assert "publishes this file" in page
+    assert 'type="checkbox"' in page
+
+
+def test_submit_route_passes_explicit_confirmation(client, monkeypatch):
+    seen = {}
+
+    def fake_submit(path, confirm=False, api_key=None):
+        seen["confirm"] = confirm
+        return intel.VTResult(status=intel.STATUS_PENDING, sha256="b" * 64,
+                              analysis_id="an-1", message="queued")
+
+    monkeypatch.setattr(intel, "submit_file", fake_submit)
+    client.post("/upload", files=[("files", ("thing.bin", b"payload bytes", "application/octet-stream"))])
+    page = client.post("/report/thing/vt-submit").text
+
+    assert seen["confirm"] is True
+    assert "Check analysis" in page
+
+
+def test_check_route_polls_the_analysis(client, monkeypatch):
+    monkeypatch.setattr(
+        intel,
+        "submit_file",
+        lambda *a, **k: intel.VTResult(status=intel.STATUS_PENDING, sha256="c" * 64, analysis_id="an-2"),
+    )
+    monkeypatch.setattr(
+        intel,
+        "get_analysis",
+        lambda analysis_id, sha256="", **k: intel.VTResult(
+            status=intel.STATUS_OK, sha256=sha256, stats={"malicious": 3, "undetected": 60}
+        ),
+    )
+    client.post("/upload", files=[("files", ("poll.bin", b"payload bytes", "application/octet-stream"))])
+    client.post("/report/poll/vt-submit")
+    page = client.post("/report/poll/vt-check").text
+    assert "3/63" in page

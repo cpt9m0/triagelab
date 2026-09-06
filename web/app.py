@@ -134,6 +134,35 @@ def lookup_vt(stem: str, refresh: bool = False):
     return RedirectResponse(f"/report/{safe_filename(stem)}", status_code=303)
 
 
+@app.post("/report/{stem}/vt-submit")
+def submit_to_vt(stem: str):
+    """Upload the file itself to VirusTotal. Deliberate, human-triggered, one click.
+
+    Reached only from the button that appears when VirusTotal has never seen the hash,
+    and only after the operator ticks the consent box in that form.
+    """
+    report = load_report(stem)
+    source = Path(report["features"]["path"])
+    if not source.is_file():
+        raise HTTPException(status_code=404, detail=f"source file is gone: {source}")
+
+    report["virustotal"] = intel.submit_file(source, confirm=True).to_dict()
+    write_report(report, REPORTS_DIR)
+    return RedirectResponse(f"/report/{safe_filename(stem)}", status_code=303)
+
+
+@app.post("/report/{stem}/vt-check")
+def check_vt_analysis(stem: str):
+    """Poll a submitted analysis; on completion this becomes the full file report."""
+    report = load_report(stem)
+    vt = report.get("virustotal") or {}
+    report["virustotal"] = intel.get_analysis(
+        vt.get("analysis_id", ""), sha256=report["features"]["sha256"]
+    ).to_dict()
+    write_report(report, REPORTS_DIR)
+    return RedirectResponse(f"/report/{safe_filename(stem)}", status_code=303)
+
+
 @app.get("/api/reports")
 def api_reports() -> list[dict]:
     return [

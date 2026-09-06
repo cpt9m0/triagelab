@@ -49,6 +49,30 @@ live demo cannot blow the quota:
 - a daily counter stops at 500
 - **only the SHA256 is sent.** The file itself never leaves your machine.
 
+## Submitting a file VirusTotal has never seen
+
+A `not_found` result means nobody has ever submitted that file - common for installers,
+freshly built binaries, and per-download stubs. It is not evidence of safety.
+
+You can upload the file so VirusTotal analyses it, but understand what that does:
+
+> **Uploading publishes the file.** Anything submitted to VirusTotal becomes retrievable
+> by their Intelligence subscribers. This is a well-known data-exfiltration path for
+> proprietary code and confidential documents. It cannot be withdrawn.
+
+So the upload is never automatic. It happens only when you ask for it:
+
+- **Dashboard**: a `not_found` panel grows an "Upload file for analysis" button behind a
+  consent checkbox. After upload the panel shows the queued analysis and a "Check analysis"
+  button; when it completes, the full report replaces it.
+- **CLI**: `uv run triagelab submit <file> --yes`, optionally `--wait 3` to poll for the
+  verdict. Without `--yes` it refuses and explains why.
+- **In code**: `intel.submit_file(path, confirm=True)`. Without `confirm` it returns an
+  error and never touches the network, so no test or agent can publish a file by accident.
+
+Submissions count against the same free-tier quota as lookups (4/min, 500/day), and
+analysis usually completes in well under a minute.
+
 ## Usage
 
 ```bash
@@ -56,6 +80,8 @@ uv run triagelab scan <file>                    # summary to stdout
 uv run triagelab scan <file> --vt               # ... plus a VirusTotal lookup
 uv run triagelab report <file> -o reports/      # write JSON + Markdown
 uv run triagelab batch <dir>                    # triage a whole directory
+uv run triagelab submit <file> --yes            # PUBLISH the file to VirusTotal
+uv run triagelab submit <file> --yes --wait 3   # ... and poll for the verdict
 uv run --extra web uvicorn web.app:app --port 8000   # dashboard on :8000
 ```
 
