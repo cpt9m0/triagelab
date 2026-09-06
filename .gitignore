@@ -6,3 +6,4 @@ __pycache__/
 reports/*.json
 reports/*.md
 !reports/.gitkeep
+uv.lock

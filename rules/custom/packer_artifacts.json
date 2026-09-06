@@ -1,0 +1,8 @@
+{
+  "id": "TLC01",
+  "name": "Packer section artifacts",
+  "category": "obfuscation",
+  "severity": 3,
+  "patterns": ["UPX0", "UPX1", "MPRESS1", ".aspack"],
+  "description": "Section names left behind by common executable packers."
+}

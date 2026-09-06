@@ -67,6 +67,10 @@ That is the feature you build on stage:
    rather than quietly leave it.
 4. Ask the `code-reviewer` subagent to review the diff before committing.
 
+`rules/custom/packer_artifacts.json` is already sitting there, matching the `UPX0`/`UPX1`
+strings in `packed_blob.bin`. The moment the loader works, that sample's score moves - so the
+feature you just built has a visible effect without writing a new rule on stage.
+
 To rehearse it again: `git checkout -- .` and you are back to the gap.
 
 ## Stage directions
