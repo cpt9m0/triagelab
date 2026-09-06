@@ -1,9 +1,9 @@
 {
   "mcpServers": {
-    "mock-intel": {
+    "virustotal": {
       "type": "stdio",
       "command": "python",
-      "args": ["mock_intel_server/server.py"]
+      "args": ["vt_mcp_server/server.py"]
     }
   }
 }

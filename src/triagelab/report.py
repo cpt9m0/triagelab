@@ -35,6 +35,17 @@ def build_report(path: str | Path) -> dict:
     }
 
 
+def attach_vt(report: dict, use_cache: bool = True) -> dict:
+    """Add a VirusTotal section to a report, in place.
+
+    Only the SHA256 is sent; the file itself never leaves this machine.
+    """
+    from .intel import lookup
+
+    report["virustotal"] = lookup(report["features"]["sha256"], use_cache=use_cache).to_dict()
+    return report
+
+
 def render_markdown(report: dict) -> str:
     """Human-readable version of a report dict."""
     f = report["features"]
@@ -63,7 +74,26 @@ def render_markdown(report: dict) -> str:
 
     lines += ["", "## Why this score", ""]
     lines += [f"- {r}" for r in report["reasons"]] or ["- No risk signals found."]
-    lines += ["", "---", "", "Synthetic lab output. No real malicious code is handled by this tool."]
+    vt = report.get("virustotal")
+    if vt:
+        lines += ["", "## VirusTotal", ""]
+        if vt["status"] == "ok":
+            lines += [
+                f"- **Detections**: {vt.get('detection_ratio', '')}",
+                f"- **Threat label**: {vt.get('threat_label') or 'none'}",
+                f"- **Type**: {vt.get('type_description') or 'unknown'}",
+                f"- **First submission**: {vt.get('first_submission') or 'unknown'}",
+                f"- **Link**: {vt.get('permalink')}",
+            ]
+        else:
+            lines.append(f"- {vt['status']}: {vt.get('message', '')}")
+
+    lines += [
+        "",
+        "---",
+        "",
+        "Static analysis only. This tool reads bytes and never executes what it inspects.",
+    ]
     return "\n".join(lines) + "\n"
 
 

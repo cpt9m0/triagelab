@@ -1,6 +1,6 @@
 ---
 name: triage-sample
-description: Run the full triage pipeline on a synthetic sample and summarise the result. Use when asked to triage, analyse, or score a file in fixtures/samples or any local file under test.
+description: Run the full triage pipeline on a file and summarise the result. Use when asked to triage, analyse, or score a file in uploads/, fixtures/samples/, or any local path.
 argument-hint: [path-to-sample]
 arguments: sample_path
 allowed-tools: Bash(uv run triagelab *), Bash(uv run python *), Read, Write
@@ -20,12 +20,16 @@ the CLI already does the work deterministically.
    - **Matched rules**: id, name, and the matched terms.
    - **What to do next**: one concrete suggestion (e.g. "hash lookup via the threat-intel
      subagent", "add a rule for the unmatched string X").
-4. If the score is `high` or `critical`, offer to delegate a hash lookup to the
-   `threat-intel` subagent. Do not perform the lookup inline.
+4. Offer to delegate a VirusTotal hash lookup to the `threat-intel` subagent. Do not
+   perform the lookup inline - the point is to keep the API response out of this context.
+   The free tier allows 4 lookups per minute, so do not fan this out across a directory.
 
 ## Rules
 
 - Report only what the tool found. Do not infer capability, attribution, or intent from
   string matches - a string is evidence of a string, not of behaviour.
-- Never edit files under `fixtures/samples/`.
+- The rules are substring matches over extracted ASCII. A packed or obfuscated binary will
+  hide them, so a clean result is not evidence of safety. Say so when the score is low but
+  entropy is high.
+- Never edit files under `fixtures/samples/` or `uploads/`. They are inputs, not workspace.
 - If the file is empty or unreadable, say so and stop.

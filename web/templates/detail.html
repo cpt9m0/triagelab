@@ -9,13 +9,50 @@
   </div>
 
   <div class="panel">
-    <table>
+    <table class="kv">
       <tr><th>SHA256</th><td class="mono">{{ report.features.sha256 }}</td></tr>
       <tr><th>MD5</th><td class="mono">{{ report.features.md5 }}</td></tr>
       <tr><th>Size</th><td class="mono">{{ report.features.size_bytes }} bytes</td></tr>
       <tr><th>Entropy</th><td class="mono">{{ report.features.entropy }}</td></tr>
       <tr><th>Strings</th><td class="mono">{{ report.features.string_count }}</td></tr>
     </table>
+  </div>
+
+  {% set vt = report.get('virustotal') %}
+  <div class="panel" style="padding: 16px 18px;">
+    <div class="row" style="justify-content: space-between;">
+      <strong>VirusTotal</strong>
+      <form action="/report/{{ stem }}/vt{% if vt %}?refresh=true{% endif %}" method="post">
+        <button class="ghost" type="submit">
+          {{ 'Refresh lookup' if vt else 'Look up this hash' }}
+        </button>
+      </form>
+    </div>
+
+    {% if not vt %}
+      <div class="note">
+        Nothing requested yet. The lookup sends only the SHA256.
+        {% if not has_key %}<strong>No VT_API_KEY set</strong> - add one to .env first.{% endif %}
+        Free tier: {{ quota.calls_per_minute }}/min, {{ quota.used_today }}/{{ quota.daily_quota }} used today.
+      </div>
+    {% elif vt.status == 'ok' %}
+      <table class="kv" style="margin-top: 10px;">
+        <tr><th>Detections</th>
+            <td class="mono {{ 'vt-hit' if vt.stats.get('malicious', 0) else 'vt-clean' }}">
+              {{ vt.detection_ratio }}</td></tr>
+        <tr><th>Threat label</th><td>{{ vt.threat_label or 'none' }}</td></tr>
+        <tr><th>File type</th><td>{{ vt.type_description or 'unknown' }}</td></tr>
+        <tr><th>Known names</th><td class="mono">{{ vt.names|join(', ') if vt.names else 'none' }}</td></tr>
+        <tr><th>First seen</th><td class="mono">{{ vt.first_submission or 'unknown' }}</td></tr>
+        <tr><th>Last analysed</th><td class="mono">{{ vt.last_analysis or 'unknown' }}</td></tr>
+        <tr><th>Submissions</th><td class="mono">{{ vt.times_submitted }}</td></tr>
+        <tr><th>Reputation</th><td class="mono">{{ vt.reputation }}</td></tr>
+        <tr><th>Report</th><td><a class="plain" href="{{ vt.permalink }}" target="_blank" rel="noopener">open on virustotal.com</a></td></tr>
+      </table>
+      <div class="note">{{ 'Served from local cache - no quota used.' if vt.cached else 'Fetched live.' }}</div>
+    {% else %}
+      <div class="note" style="margin-top: 10px;"><strong>{{ vt.status }}</strong> - {{ vt.message }}</div>
+    {% endif %}
   </div>
 
   <div class="panel scroll">

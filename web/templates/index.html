@@ -1,7 +1,25 @@
 {% extends "base.html" %}
 {% block body %}
   <h1>triagelab</h1>
-  <div class="sub">{{ reports|length }} report{{ '' if reports|length == 1 else 's' }} on disk, worst first</div>
+  <div class="sub">
+    {{ reports|length }} report{{ '' if reports|length == 1 else 's' }} on disk
+    &middot; VirusTotal: {{ quota.used_today }}/{{ quota.daily_quota }} today,
+    {{ quota.calls_last_minute }}/{{ quota.calls_per_minute }} this minute
+    {%- if not has_key %} &middot; <strong>no API key set</strong>{% endif %}
+  </div>
+
+  {% if error %}<div class="flash bad">{{ error }}</div>{% endif %}
+  {% if added %}<div class="flash">Triaged {{ added }} file{{ '' if added == 1 else 's' }}.</div>{% endif %}
+
+  <form class="drop" action="/upload" method="post" enctype="multipart/form-data">
+    <div class="row" style="justify-content: center;">
+      <input type="file" name="files" multiple required>
+      <button type="submit">Triage</button>
+    </div>
+    <div class="note">
+      Files are read as bytes and never executed. Only the SHA256 is ever sent to VirusTotal.
+    </div>
+  </form>
 
   <div class="tiles">
     {% for band in ['critical', 'high', 'medium', 'low'] %}
@@ -15,19 +33,27 @@
   <div class="panel scroll">
     <table>
       <thead>
-        <tr><th>Sample</th><th>Score</th><th></th><th>Band</th><th>Top signal</th></tr>
+        <tr><th>Sample</th><th>Score</th><th></th><th>Band</th><th>VT</th><th>Top signal</th></tr>
       </thead>
       <tbody>
       {% for r in reports %}
+        {% set vt = r.get('virustotal') %}
         <tr>
           <td><a href="/report/{{ r.features.name.rsplit('.', 1)[0] }}">{{ r.features.name }}</a></td>
           <td class="mono">{{ r.score }}</td>
           <td><span class="bar"><i style="width: {{ r.score }}%; background: var(--{{ r.band }});"></i></span></td>
           <td><span class="band {{ r.band }}">{{ r.band }}</span></td>
+          <td class="mono">
+            {%- if vt and vt.status == 'ok' -%}
+              <span class="{{ 'vt-hit' if vt.stats.get('malicious', 0) else 'vt-clean' }}">{{ vt.detection_ratio }}</span>
+            {%- elif vt and vt.status == 'not_found' -%}<span class="muted">unseen</span>
+            {%- else -%}<span class="muted">-</span>{%- endif -%}
+          </td>
           <td class="muted">{{ r.matches[0].name if r.matches else 'no rule matches' }}</td>
         </tr>
       {% else %}
-        <tr><td colspan="5" class="muted">Nothing yet. Run <span class="mono">uv run triagelab batch fixtures/samples</span>.</td></tr>
+        <tr><td colspan="6" class="muted">Nothing yet. Upload a file above, or run
+          <span class="mono">uv run triagelab batch &lt;dir&gt;</span>.</td></tr>
       {% endfor %}
       </tbody>
     </table>

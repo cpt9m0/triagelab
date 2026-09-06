@@ -8,9 +8,22 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .report import DEFAULT_OUTDIR, build_report, write_report
+from .report import DEFAULT_OUTDIR, attach_vt, build_report, write_report
 
 BAND_MARK = {"low": "[ low  ]", "medium": "[medium]", "high": "[ HIGH ]", "critical": "[ CRIT ]"}
+
+
+def _print_vt(report: dict) -> None:
+    vt = report.get("virustotal")
+    if not vt:
+        return
+    if vt["status"] == "ok":
+        print(f"  vt       {vt['detection_ratio']} detections"
+              f"{' - ' + vt['threat_label'] if vt['threat_label'] else ''}"
+              f"{' (cached)' if vt['cached'] else ''}")
+        print(f"  vt link  {vt['permalink']}")
+    else:
+        print(f"  vt       {vt['status']}: {vt['message']}")
 
 
 def _print_summary(report: dict) -> None:
@@ -27,15 +40,20 @@ def _print_summary(report: dict) -> None:
 
 def cmd_scan(args: argparse.Namespace) -> int:
     report = build_report(args.path)
+    if args.vt:
+        attach_vt(report)
     if args.json:
         print(json.dumps(report, indent=2))
     else:
         _print_summary(report)
+        _print_vt(report)
     return 0
 
 
 def cmd_report(args: argparse.Namespace) -> int:
     report = build_report(args.path)
+    if args.vt:
+        attach_vt(report)
     json_path, md_path = write_report(report, args.outdir)
     print(f"wrote {json_path}")
     print(f"wrote {md_path}")
@@ -52,6 +70,8 @@ def cmd_batch(args: argparse.Namespace) -> int:
     rows = []
     for path in files:
         report = build_report(path)
+        if args.vt:
+            attach_vt(report)
         write_report(report, args.outdir)
         rows.append((report["band"], report["score"], path.name))
 
@@ -75,16 +95,23 @@ def build_parser() -> argparse.ArgumentParser:
     scan = sub.add_parser("scan", help="analyse one file and print a summary")
     scan.add_argument("path")
     scan.add_argument("--json", action="store_true", help="emit the full report as JSON")
+    scan.add_argument("--vt", action="store_true", help="also look the hash up on VirusTotal")
     scan.set_defaults(func=cmd_scan)
 
     report = sub.add_parser("report", help="analyse one file and write JSON + Markdown reports")
     report.add_argument("path")
     report.add_argument("-o", "--outdir", default=str(DEFAULT_OUTDIR))
+    report.add_argument("--vt", action="store_true", help="also look the hash up on VirusTotal")
     report.set_defaults(func=cmd_report)
 
     batch = sub.add_parser("batch", help="triage every file in a directory")
     batch.add_argument("directory")
     batch.add_argument("-o", "--outdir", default=str(DEFAULT_OUTDIR))
+    batch.add_argument(
+        "--vt",
+        action="store_true",
+        help="look each hash up on VirusTotal (free tier is 4/min - slow for big batches)",
+    )
     batch.set_defaults(func=cmd_batch)
 
     return parser

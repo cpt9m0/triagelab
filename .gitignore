@@ -3,7 +3,18 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
-reports/*.json
-reports/*.md
-!reports/.gitkeep
 uv.lock
+
+# Secrets - never commit a real API key
+.env
+
+# Samples and analysis output are the presenter's own files, never committed
+fixtures/samples/*
+!fixtures/samples/.gitkeep
+uploads/*
+!uploads/.gitkeep
+reports/*
+!reports/.gitkeep
+
+# Cached VirusTotal responses
+.vt_cache/
