@@ -1,0 +1,31 @@
+[project]
+name = "triagelab"
+version = "0.1.0"
+description = "Synthetic file-triage lab used as a Claude workflow demo. No real malware, ever."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+web = ["fastapi>=0.110", "uvicorn>=0.29", "jinja2>=3.1"]
+
+[project.scripts]
+triagelab = "triagelab.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/triagelab"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]

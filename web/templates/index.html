@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block body %}
+  <h1>triagelab</h1>
+  <div class="sub">{{ reports|length }} report{{ '' if reports|length == 1 else 's' }} on disk, worst first</div>
+
+  <div class="tiles">
+    {% for band in ['critical', 'high', 'medium', 'low'] %}
+      <div class="tile">
+        <b class="mono">{{ summary.get(band, 0) }}</b>
+        <span class="band {{ band }}">{{ band }}</span>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="panel scroll">
+    <table>
+      <thead>
+        <tr><th>Sample</th><th>Score</th><th></th><th>Band</th><th>Top signal</th></tr>
+      </thead>
+      <tbody>
+      {% for r in reports %}
+        <tr>
+          <td><a href="/report/{{ r.features.name.rsplit('.', 1)[0] }}">{{ r.features.name }}</a></td>
+          <td class="mono">{{ r.score }}</td>
+          <td><span class="bar"><i style="width: {{ r.score }}%; background: var(--{{ r.band }});"></i></span></td>
+          <td><span class="band {{ r.band }}">{{ r.band }}</span></td>
+          <td class="muted">{{ r.matches[0].name if r.matches else 'no rule matches' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="muted">Nothing yet. Run <span class="mono">uv run triagelab batch fixtures/samples</span>.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

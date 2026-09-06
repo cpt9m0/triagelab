@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ report.features.name }} - triagelab{% endblock %}
+{% block body %}
+  <header><a href="/">&larr; all reports</a></header>
+  <h1>{{ report.features.name }}</h1>
+  <div class="sub">
+    <span class="band {{ report.band }}">{{ report.band }}</span>
+    &nbsp;score {{ report.score }}/100 &middot; generated {{ report.generated_at }}
+  </div>
+
+  <div class="panel">
+    <table>
+      <tr><th>SHA256</th><td class="mono">{{ report.features.sha256 }}</td></tr>
+      <tr><th>MD5</th><td class="mono">{{ report.features.md5 }}</td></tr>
+      <tr><th>Size</th><td class="mono">{{ report.features.size_bytes }} bytes</td></tr>
+      <tr><th>Entropy</th><td class="mono">{{ report.features.entropy }}</td></tr>
+      <tr><th>Strings</th><td class="mono">{{ report.features.string_count }}</td></tr>
+    </table>
+  </div>
+
+  <div class="panel scroll">
+    <table>
+      <thead><tr><th>Rule</th><th>Category</th><th>Sev</th><th>Matched terms</th></tr></thead>
+      <tbody>
+      {% for m in report.matches %}
+        <tr>
+          <td>{{ m.rule_id }} {{ m.name }}</td>
+          <td class="muted">{{ m.category }}</td>
+          <td class="mono">{{ m.severity }}</td>
+          <td class="mono">{{ m.matched_terms|join(', ') }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="muted">No rules matched.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel" style="padding: 16px 18px;">
+    <ul class="reasons">
+      {% for reason in report.reasons %}<li>{{ reason }}</li>{% else %}<li class="muted">No risk signals.</li>{% endfor %}
+    </ul>
+  </div>
+{% endblock %}

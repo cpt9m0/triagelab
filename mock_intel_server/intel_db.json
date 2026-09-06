@@ -1,0 +1,42 @@
+{
+  "cce4b8b3b995975e77329efde912b030bf993f13eab5a6d39ba0de800542c895": {
+    "sample_name": "injector_stub.bin",
+    "verdict": "malicious",
+    "family": "LabInjector",
+    "first_seen": "2026-03-14",
+    "confidence": "high",
+    "context": "Fabricated record: process-injection chain seen in lab exercise 4."
+  },
+  "c00e60f361a4d56403c6ca4ea1a863d8dfe824ab012c048d41d6a9e268b9a8f6": {
+    "sample_name": "script_dropper.bin",
+    "verdict": "malicious",
+    "family": "LabDropper",
+    "first_seen": "2026-01-08",
+    "confidence": "medium",
+    "context": "Fabricated record: encoded-command dropper used in lab exercise 2."
+  },
+  "7279578d6d2ca1a391564bf296b6526c38a56b0c782f899999e58630a55c7a56": {
+    "sample_name": "downloader_stub.bin",
+    "verdict": "suspicious",
+    "family": "LabFetcher",
+    "first_seen": "2026-05-22",
+    "confidence": "medium",
+    "context": "Fabricated record: retrieves a second stage over HTTP."
+  },
+  "45bb754be85c043b7fa70cccbc858782251ca628491f61d1fe4264f15c707a61": {
+    "sample_name": "vm_aware_stub.bin",
+    "verdict": "suspicious",
+    "family": "LabEvader",
+    "first_seen": "2026-04-02",
+    "confidence": "low",
+    "context": "Fabricated record: sandbox-aware sample, low sample count."
+  },
+  "e6338b2048e3525f7ad5294203cc480be541e7225623ea378c5bb7e3026b6311": {
+    "sample_name": "packed_blob.bin",
+    "verdict": "unrated",
+    "family": "unknown",
+    "first_seen": "2026-06-30",
+    "confidence": "low",
+    "context": "Fabricated record: high-entropy blob, no behavioural data."
+  }
+}

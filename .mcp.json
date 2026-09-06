@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "mock-intel": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["mock_intel_server/server.py"]
+    }
+  }
+}

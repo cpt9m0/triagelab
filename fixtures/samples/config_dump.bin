@@ -1,0 +1,16 @@
+hostname=lab-01
+GetComputerName
+ipconfig /all
+log_level=debug
+hostname=lab-01
+GetComputerName
+ipconfig /all
+log_level=debug
+hostname=lab-01
+GetComputerName
+ipconfig /all
+log_level=debug
+hostname=lab-01
+GetComputerName
+ipconfig /all
+log_level=debug

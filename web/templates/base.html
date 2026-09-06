@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}triagelab{% endblock %}</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --panel: #ffffff; --ink: #1d1b18; --muted: #6b6660;
+    --line: #e6e1d9; --accent: #6d5cc4;
+    --low: #4f8a5b; --medium: #b8862b; --high: #c2632c; --critical: #b3403a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17161a; --panel: #201f24; --ink: #ece9e4; --muted: #a09a92;
+      --line: #33313a; --accent: #a394ee;
+      --low: #6fbb7e; --medium: #d9ad55; --high: #e08b57; --critical: #e4736c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 32px 20px 64px; }
+  header a { color: var(--muted); text-decoration: none; font-size: 13px; }
+  header a:hover { color: var(--accent); }
+  h1 { font-size: 22px; margin: 8px 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: 10px; padding: 4px 18px; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; letter-spacing: .07em; text-transform: uppercase;
+       color: var(--muted); font-weight: 600; padding: 12px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 11px 8px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: none; }
+  td a { color: var(--ink); text-decoration: none; font-weight: 500; }
+  td a:hover { color: var(--accent); }
+  .band { display: inline-block; padding: 1px 9px; border-radius: 999px;
+          font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+          color: #fff; }
+  .band.low { background: var(--low); } .band.medium { background: var(--medium); }
+  .band.high { background: var(--high); } .band.critical { background: var(--critical); }
+  .bar { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; min-width: 90px; }
+  .bar > i { display: block; height: 100%; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+  .muted { color: var(--muted); }
+  .tiles { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .tile { flex: 1 1 120px; background: var(--panel); border: 1px solid var(--line);
+          border-radius: 10px; padding: 14px 16px; }
+  .tile b { display: block; font-size: 24px; font-weight: 650; }
+  ul.reasons { margin: 0; padding-left: 18px; }
+  ul.reasons li { margin: 6px 0; }
+  footer { margin-top: 32px; font-size: 12px; color: var(--muted); }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    {% block body %}{% endblock %}
+    <footer>Synthetic lab data. No real malicious code is handled by this tool.</footer>
+  </div>
+</body>
+</html>
