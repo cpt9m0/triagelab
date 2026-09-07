@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --extra web
+      - run: uv run ruff check src tests web
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --extra web
+      - run: uv run pytest -q

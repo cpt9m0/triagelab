@@ -288,8 +288,8 @@ def _multipart_envelope(field_name: str, filename: str) -> tuple[bytes, bytes, s
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="{field_name}"; filename="{safe}"\r\n'
         f"Content-Type: application/octet-stream\r\n\r\n"
-    ).encode("utf-8")
-    tail = f"\r\n--{boundary}--\r\n".encode("utf-8")
+    ).encode()
+    tail = f"\r\n--{boundary}--\r\n".encode()
     return head, tail, f"multipart/form-data; boundary={boundary}"
 
 

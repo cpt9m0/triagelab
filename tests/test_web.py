@@ -8,9 +8,8 @@ fastapi = pytest.importorskip("fastapi", reason="web extra not installed")
 pytest.importorskip("multipart", reason="python-multipart not installed")
 pytest.importorskip("httpx", reason="httpx not installed (required by starlette.testclient)")
 
-from fastapi.testclient import TestClient  # noqa: E402
-
-from web.app import app, safe_filename  # noqa: E402
+from fastapi.testclient import TestClient
+from web.app import app, safe_filename
 
 
 @pytest.fixture()
