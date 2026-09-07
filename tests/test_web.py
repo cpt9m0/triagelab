@@ -6,6 +6,7 @@ from triagelab import intel
 
 fastapi = pytest.importorskip("fastapi", reason="web extra not installed")
 pytest.importorskip("multipart", reason="python-multipart not installed")
+pytest.importorskip("httpx", reason="httpx not installed (required by starlette.testclient)")
 
 from fastapi.testclient import TestClient  # noqa: E402
 

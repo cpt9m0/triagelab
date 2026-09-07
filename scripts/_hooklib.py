@@ -66,7 +66,20 @@ def run_tests(cwd: Path, timeout: int = 180) -> tuple[bool, str, bool]:
 
 def _looks_like_pytest_output(output: str) -> bool:
     lowered = output.lower()
-    markers = ("passed", "failed", "error at", "collected", "no tests ran", "assert")
+    markers = (
+        "passed",
+        "failed",
+        "error at",
+        "collected",
+        "no tests ran",
+        "assert",
+        # Pytest ran and hit a collection error (e.g. a broken/missing import in a
+        # test module). That is a real project problem, not a missing test runner,
+        # so it must count as pytest output rather than fall through silently.
+        "error collecting",
+        "errors during collection",
+        "short test summary info",
+    )
     noise = ("no module named pytest", "failed to install", "error: failed", "not found")
     if any(n in lowered for n in noise):
         return False

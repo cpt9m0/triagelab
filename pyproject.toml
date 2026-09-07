@@ -13,7 +13,7 @@ web = ["fastapi>=0.110", "uvicorn>=0.29", "jinja2>=3.1", "python-multipart>=0.0.
 triagelab = "triagelab.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8.0", "ruff>=0.6"]
+dev = ["pytest>=8.0", "ruff>=0.6", "httpx>=0.27"]
 
 [build-system]
 requires = ["hatchling"]
@@ -24,7 +24,7 @@ packages = ["src/triagelab"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 
 [tool.ruff]
 line-length = 100
