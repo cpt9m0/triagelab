@@ -172,8 +172,9 @@ string matching finds strings, and a packed sample would hide them.
 
 ## CI
 
-Every pull request runs `ruff check`, `pytest`, and an automated Claude code review before
-it can be merged. See `.github/workflows/`.
+Every pull request runs `ruff check`, `pytest`, and an automated Claude code review - see
+`.github/workflows/`. Branch protection on `main` requires all three to pass before a
+non-admin can merge; repo admins can still bypass it when needed.
 
 ## Troubleshooting: `failed to locate pyvenv.cfg`
 
