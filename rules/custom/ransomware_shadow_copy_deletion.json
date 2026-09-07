@@ -1,0 +1,8 @@
+{
+  "id": "TLC02",
+  "name": "Shadow copy / backup deletion",
+  "category": "ransomware",
+  "severity": 5,
+  "patterns": ["vssadmin delete shadows", "wbadmin delete catalog", "bcdedit /set {default} recoveryenabled no"],
+  "description": "Destroys Windows backup and recovery mechanisms, a step ransomware takes before encryption to block restoration."
+}

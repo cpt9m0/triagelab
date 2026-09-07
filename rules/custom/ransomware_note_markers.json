@@ -1,0 +1,8 @@
+{
+  "id": "TLC03",
+  "name": "Ransom note / encrypted-extension markers",
+  "category": "ransomware",
+  "severity": 4,
+  "patterns": [".locked", "README_TO_DECRYPT", "YOUR FILES ARE ENCRYPTED"],
+  "description": "File extensions or note text ransomware appends or drops after encrypting a victim's files."
+}
