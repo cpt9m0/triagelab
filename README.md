@@ -170,6 +170,11 @@ claude --worktree rule-engine
 /bin/ls` or `notepad.exe` - to prove the analysis isn't theatre, then name the limitation:
 string matching finds strings, and a packed sample would hide them.
 
+## CI
+
+Every pull request runs `ruff check`, `pytest`, and an automated Claude code review before
+it can be merged. See `.github/workflows/`.
+
 ## Troubleshooting: `failed to locate pyvenv.cfg`
 
 If `uv run` reports `failed to locate pyvenv.cfg`, the `.venv` in this folder is partial:
