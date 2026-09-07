@@ -23,8 +23,8 @@ from fastapi.templating import Jinja2Templates
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from triagelab import intel  # noqa: E402
-from triagelab.report import attach_vt, build_report, write_report  # noqa: E402
+from triagelab import intel
+from triagelab.report import attach_vt, build_report, write_report
 
 REPORTS_DIR = PROJECT_ROOT / "reports"
 UPLOADS_DIR = PROJECT_ROOT / "uploads"
@@ -87,7 +87,7 @@ def index(request: Request, error: str = "", added: int = 0):
 
 
 @app.post("/upload")
-async def upload(files: list[UploadFile] = File(...)):
+async def upload(files: list[UploadFile] = File(...)):  # noqa: B008 (FastAPI's documented pattern)
     """Accept one or more files, triage each, write a report. Never executes anything.
 
     Written to disk in chunks rather than read whole into memory: a 200MB installer

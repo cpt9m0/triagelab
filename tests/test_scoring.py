@@ -4,17 +4,17 @@ from triagelab.rules import RuleMatch
 
 
 def _features(**kwargs) -> FileFeatures:
-    defaults = dict(
-        path="x.bin",
-        name="x.bin",
-        size_bytes=100,
-        sha256="0" * 64,
-        md5="0" * 32,
-        entropy=1.0,
-        printable_ratio=1.0,
-        string_count=0,
-        strings=[],
-    )
+    defaults = {
+        "path": "x.bin",
+        "name": "x.bin",
+        "size_bytes": 100,
+        "sha256": "0" * 64,
+        "md5": "0" * 32,
+        "entropy": 1.0,
+        "printable_ratio": 1.0,
+        "string_count": 0,
+        "strings": [],
+    }
     defaults.update(kwargs)
     return FileFeatures(**defaults)
 

@@ -1,0 +1,44 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Review pull request #${{ github.event.pull_request.number }} in this repository.
+
+            1. Run `git diff origin/${{ github.event.pull_request.base.ref }}...HEAD` to see the
+               changes in this PR.
+            2. Use the Task tool to run the project's `code-reviewer` subagent
+               (.claude/agents/code-reviewer.md) against that diff. It checks correctness,
+               dependency discipline, rule hygiene, the scoring test contract, and safety, per
+               this project's CLAUDE.md.
+            3. Post the subagent's findings on this pull request: one inline comment per finding
+               at its file/line if it names one, otherwise one short summary comment. If the
+               subagent reports the diff is clean, post one short comment saying so.
+
+            Post at most one comment per finding, and do not repeat a finding you already posted
+            on a prior run for this PR.
+          claude_args: |
+            --allowedTools "Task,Bash(git diff:*),Bash(git status:*),mcp__github_inline_comment__create_inline_comment"
