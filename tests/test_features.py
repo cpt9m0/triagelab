@@ -33,3 +33,15 @@ def test_extract_reads_file_and_hashes_it(tmp_path):
     assert result.size_bytes == 33
     assert len(result.sha256) == 64
     assert "GetUserName and some padding text" in result.strings
+
+
+def test_extract_on_empty_file_does_not_crash(tmp_path):
+    target = tmp_path / "empty.bin"
+    target.write_bytes(b"")
+    result = features.extract(target)
+    assert result.size_bytes == 0
+    assert result.entropy == 0.0
+    assert result.printable_ratio == 0.0
+    assert result.string_count == 0
+    assert result.strings == []
+    assert len(result.sha256) == 64
