@@ -176,6 +176,11 @@ Every pull request runs `ruff check`, `pytest`, and an automated Claude code rev
 `.github/workflows/`. Branch protection on `main` requires all three to pass before a
 non-admin can merge; repo admins can still bypass it when needed.
 
+Mentioning `@claude` on an issue (in the body or a comment) triggers
+`claude-issue-implement.yml`, which plans and implements the request and opens a PR against
+`main`. That PR still has to pass the lint/test/review gate above like any other. Only users
+with write access to the repo can trigger it - GitHub enforces that, not this workflow.
+
 ## Troubleshooting: `failed to locate pyvenv.cfg`
 
 If `uv run` reports `failed to locate pyvenv.cfg`, the `.venv` in this folder is partial:
