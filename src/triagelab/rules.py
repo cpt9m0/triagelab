@@ -91,6 +91,17 @@ BUILTIN_RULES: tuple[Rule, ...] = (
         patterns=("IsDebuggerPresent", "CheckRemoteDebuggerPresent", "vmware", "VBoxService"),
         description="Looks for a debugger or virtual machine before running.",
     ),
+    Rule(
+        id="TL007",
+        name="PowerShell download cradle",
+        category="download-cradle",
+        severity=4,
+        patterns=(
+            "Net.WebClient).DownloadString",
+            "Net.WebClient).DownloadFile",
+        ),
+        description="Classic PowerShell one-liner that pulls and runs a remote payload in memory.",
+    ),
 )
 
 
