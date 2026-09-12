@@ -99,7 +99,6 @@ BUILTIN_RULES: tuple[Rule, ...] = (
         patterns=(
             "IEX (New-Object Net.WebClient)",
             "Net.WebClient).DownloadString",
-            "-EncodedCommand",
             "Net.WebClient).DownloadFile",
         ),
         description="Classic PowerShell one-liner that pulls and runs a remote payload in memory.",
