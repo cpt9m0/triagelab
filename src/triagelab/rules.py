@@ -97,7 +97,6 @@ BUILTIN_RULES: tuple[Rule, ...] = (
         category="download-cradle",
         severity=4,
         patterns=(
-            "IEX (New-Object Net.WebClient)",
             "Net.WebClient).DownloadString",
             "Net.WebClient).DownloadFile",
         ),

