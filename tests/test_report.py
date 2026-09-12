@@ -27,3 +27,15 @@ def test_markdown_notes_when_no_rules_match(tmp_path):
     target.write_bytes(b"nothing interesting in this file at all")
     rendered = report.render_markdown(report.build_report(target))
     assert "No rules matched." in rendered
+
+
+def test_build_report_on_empty_file_does_not_crash(tmp_path):
+    target = tmp_path / "empty.bin"
+    target.write_bytes(b"")
+    result = report.build_report(target)
+    assert result["features"]["size_bytes"] == 0
+    assert result["features"]["entropy"] == 0.0
+    assert result["score"] == 0
+    assert result["band"] == "low"
+    rendered = report.render_markdown(result)
+    assert "# Triage report: empty.bin" in rendered

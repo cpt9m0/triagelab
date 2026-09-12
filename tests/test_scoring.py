@@ -51,3 +51,11 @@ def test_band_boundaries():
     assert scoring.band_for(20) == "medium"
     assert scoring.band_for(50) == "high"
     assert scoring.band_for(80) == "critical"
+
+
+def test_empty_file_scores_zero_without_crashing():
+    empty = _features(size_bytes=0, entropy=0.0, printable_ratio=0.0)
+    result = scoring.score(empty, [])
+    assert result.score == 0
+    assert result.band == "low"
+    assert "empty file - nothing to analyse" in result.reasons
