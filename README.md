@@ -124,7 +124,8 @@ That is the feature you build on stage:
 2. Review the plan, `Ctrl+G` to edit it, approve.
 3. Let Claude implement. The PostToolUse hook runs the suite after each edit, and the
    gap-guarding test forces Claude to update the contract rather than quietly leave it.
-4. Ask the `code-reviewer` subagent to review the diff before committing.
+4. Open the pull request and show Codex reviewing the diff with the `code-reviewer`
+   subagent's rubric.
 
 `rules/custom/packer_artifacts.json` is already there, matching `UPX0`/`UPX1`. Upload a
 packed binary before the demo and its score will move the moment the loader works.
@@ -172,14 +173,15 @@ string matching finds strings, and a packed sample would hide them.
 
 ## CI
 
-Every pull request runs `ruff check`, `pytest`, and an automated Claude code review - see
-`.github/workflows/`. Branch protection on `main` requires all three to pass before a
-non-admin can merge; repo admins can still bypass it when needed.
+Every pull request runs `ruff check` and `pytest` through `.github/workflows/ci.yml`. Codex
+reviews non-draft pull requests in GitHub and follows the repository-specific review rules in
+`AGENTS.md`. Branch protection on `main` requires lint and tests to pass before a non-admin can
+merge; repo admins can still bypass it when needed.
 
 Mentioning `@claude` on an issue (in the body or a comment) triggers
 `claude-issue-implement.yml`, which plans and implements the request and opens a PR against
-`main`. That PR still has to pass the lint/test/review gate above like any other. Only users
-with write access to the repo can trigger it - GitHub enforces that, not this workflow.
+`main`. Codex then reviews that PR, while lint and tests remain the required CI gate. Only users
+with write access to the repo can trigger Claude - GitHub enforces that, not this workflow.
 
 ## Troubleshooting: `failed to locate pyvenv.cfg`
 
@@ -233,6 +235,7 @@ Delete `.vt_cache/` only if you want to prove a lookup is live - it costs quota 
 
 ```
 CLAUDE.md                  project context and conventions (rung 1)
+AGENTS.md                  repository-specific Codex review rules
 .env / .env.example        VT_API_KEY - .env is gitignored
 .claude/settings.json      three hooks (rung 5)
 .claude/skills/            triage-sample, new-rule (rung 3)
